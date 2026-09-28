@@ -1,0 +1,39 @@
+name: Mr Uncut Test Shot
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_path:
+        description: Local path to the approved Mr. Uncut studio frame on the runner
+        required: true
+        type: string
+      voice_id:
+        description: ElevenLabs voice ID available through Sync Labs
+        required: true
+        type: string
+      script:
+        description: Short English test line
+        required: true
+        default: "Everybody keeps pretending this is normal. I don't buy it. I'm Mr. Uncut, and I'm going to say exactly what I think."
+        type: string
+
+jobs:
+  generate:
+    runs-on: [self-hosted, linux, personagemia]
+    timeout-minutes: 30
+    env:
+      PERSONAGEMIA_SYNC_API_KEY: ${{ secrets.SYNC_API_KEY }}
+      PERSONAGEMIA_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -e .
+      - name: Generate Mr. Uncut test shot
+        run: >-
+          personagemia test-shot
+          --image "${{ inputs.image_path }}"
+          --voice-id "${{ inputs.voice_id }}"
+          --script "${{ inputs.script }}"
+          --output-name "mr_uncut_10s_test"
