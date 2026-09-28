@@ -10,10 +10,18 @@ class Settings(BaseSettings):
 
     env: str = "development"
     output_dir: Path = Path("outputs")
-    character_config: Path = Path("config/character.example.yaml")
+    character_config: Path = Path("config/mr_uncut.yaml")
     studio_config: Path = Path("config/studio.example.yaml")
     avatar_engine: str = "mock"
     avatar_command: str | None = None
+
+    anthropic_api_key: str | None = None
+    anthropic_model: str = "claude-sonnet-5"
+
+    sync_api_key: str | None = None
+    sync_base_url: str = "https://api.sync.so"
+    sync_model: str = "sync-3"
+    sync_voice_id: str | None = None
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
