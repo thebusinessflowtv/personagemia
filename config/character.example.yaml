@@ -1,0 +1,27 @@
+id: creator_001
+name: TBD
+language: en-US
+identity:
+  fictional: true
+  master_image: assets/characters/master.png
+personality:
+  archetype: outspoken_commentator
+  confidence: 0.95
+  energy: 0.85
+  expressiveness: 0.90
+  sarcasm: 0.65
+  humor: 0.60
+  directness: 0.90
+behavior:
+  eye_contact: strong
+  dominant_hand: right
+  gesture_frequency: high
+  head_motion: medium
+  brow_expression: high
+  posture: confident
+  avoid_random_gestures: true
+  sync_gestures_to_meaning: true
+voice:
+  language: en-US
+  provider: TBD
+  voice_id: TBD

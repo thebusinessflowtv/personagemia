@@ -1,0 +1,20 @@
+id: studio_001
+background: assets/studio/studio_master.png
+mode: fixed
+camera:
+  framing: medium_shot
+  crop: waist_up
+  movement: none
+  angle: eye_level
+lighting:
+  fixed: true
+background_rules:
+  animated_screens: false
+  moving_people: false
+  moving_objects: false
+  dynamic_reflections: false
+  preserve_pixels_when_possible: true
+render:
+  fps: 30
+  width: 1920
+  height: 1080
