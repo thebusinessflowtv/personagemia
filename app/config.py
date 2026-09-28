@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     echo_output_dir: Path = Path("outputs/echomimic")
     echo_fps: int = 25
     echo_size: int = 768
-    echo_steps: int = 15
+    echo_steps: int = 8
     echo_guidance_scale: float = 4.5
     echo_audio_guidance_scale: float = 2.0
     echo_seed: int = 43
