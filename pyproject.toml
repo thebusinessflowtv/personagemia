@@ -4,11 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "personagemia"
-version = "0.1.0"
-description = "Virtual creator pipeline for a fixed-studio AI presenter"
+version = "0.2.0"
+description = "Virtual creator pipeline for Mr. Uncut, a fixed-studio AI presenter"
 requires-python = ">=3.11"
 dependencies = [
+  "anthropic>=0.75,<1",
   "fastapi>=0.115,<1",
+  "httpx>=0.27,<1",
   "uvicorn[standard]>=0.30,<1",
   "pydantic>=2.8,<3",
   "pydantic-settings>=2.4,<3",
@@ -17,7 +19,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<9", "httpx>=0.27,<1", "ruff>=0.6,<1"]
+dev = ["pytest>=8,<9", "ruff>=0.6,<1"]
 
 [project.scripts]
 personagemia = "app.cli:app"
