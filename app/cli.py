@@ -51,23 +51,35 @@ def list_voices() -> None:
 def test_shot(
     image: Path = typer.Option(..., "--image", exists=True, dir_okay=False),
     script: str = typer.Option(..., "--script", help="English line for the test"),
-    voice_id: str = typer.Option(..., "--voice-id"),
+    voice_id: str | None = typer.Option(None, "--voice-id"),
     output_name: str = typer.Option("mr_uncut_test", "--output-name"),
     stability: float = typer.Option(0.28, "--stability", min=0.0, max=1.0),
 ) -> None:
     """Generate a short Mr. Uncut image-to-talking-video test using Sync Labs sync-3."""
     sync = SyncLabsClient()
+    selected_voice = voice_id
+    if not selected_voice:
+        voices = sync.list_voices()
+        if not voices:
+            raise RuntimeError("No Sync Labs / ElevenLabs voices are available")
+        selected_voice = voices[0].get("id") or voices[0].get("voiceId")
+        if not selected_voice:
+            raise RuntimeError("The first available voice has no usable id")
+        typer.echo(f"Using test voice: {voices[0].get('name', 'unknown')} ({selected_voice})")
+
     audio = sync.synthesize(
         script,
-        voice_id=voice_id,
+        voice_id=selected_voice,
         stability=stability,
         similarity_boost=0.80,
     )
+    typer.echo(f"Audio ready: {audio.get('url')}")
     generation = sync.generate_from_image(
         image,
         audio_url=audio["url"],
         output_name=output_name,
     )
+    typer.echo(f"Generation submitted: {generation['id']}")
     result = sync.wait_for_generation(generation["id"])
     typer.echo(json.dumps(result, indent=2))
 
