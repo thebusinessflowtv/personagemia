@@ -1,13 +1,17 @@
 import json
+import uuid
 from pathlib import Path
 
 import typer
 
 from app.acting import ActingDirector
+from app.config import Settings
+from app.local_avatar import EchoMimicFlashEngine, MuseTalkRefiner
+from app.local_doctor import run_doctor
+from app.local_tts import VOICE_PRESETS, LocalTTS
 from app.models import RenderRequest
 from app.pipeline import AvatarPipeline
 from app.script_writer import ScriptWriter
-from app.sync_labs import SyncLabsClient
 
 app = typer.Typer(help="PersonagemIA virtual creator toolkit")
 
@@ -40,47 +44,92 @@ def write_script(
     typer.echo(script)
 
 
-@app.command("list-voices")
-def list_voices() -> None:
-    """List ElevenLabs voices exposed to this Sync Labs organization."""
-    voices = SyncLabsClient().list_voices()
-    typer.echo(json.dumps(voices, indent=2))
+@app.command("local-doctor")
+def local_doctor() -> None:
+    """Validate the local zero-cost TTS/GPU/avatar runtime."""
+    checks = run_doctor()
+    failures = 0
+    for check in checks:
+        icon = "OK" if check.ok else "MISSING"
+        typer.echo(f"[{icon}] {check.name}: {check.detail}")
+        failures += int(not check.ok)
+    if failures:
+        raise typer.Exit(code=2)
 
 
-@app.command("test-shot")
-def test_shot(
-    image: Path = typer.Option(..., "--image", exists=True, dir_okay=False),
-    script: str = typer.Option(..., "--script", help="English line for the test"),
-    voice_id: str | None = typer.Option(None, "--voice-id"),
-    output_name: str = typer.Option("mr_uncut_test", "--output-name"),
-    stability: float = typer.Option(0.28, "--stability", min=0.0, max=1.0),
+@app.command("voice-samples")
+def voice_samples(
+    text: str = typer.Option(
+        "Everybody keeps pretending this is normal. I don't buy it. I'm Mr. Uncut, and I'm going to say exactly what I think.",
+        "--text",
+    ),
+    presets: str = typer.Option("puck,adam,liam", "--presets"),
+    output_dir: Path = typer.Option(Path("outputs/voice_samples"), "--output-dir"),
 ) -> None:
-    """Generate a short Mr. Uncut image-to-talking-video test using Sync Labs sync-3."""
-    sync = SyncLabsClient()
-    selected_voice = voice_id
-    if not selected_voice:
-        voices = sync.list_voices()
-        if not voices:
-            raise RuntimeError("No Sync Labs / ElevenLabs voices are available")
-        selected_voice = voices[0].get("id") or voices[0].get("voiceId")
-        if not selected_voice:
-            raise RuntimeError("The first available voice has no usable id")
-        typer.echo(f"Using test voice: {voices[0].get('name', 'unknown')} ({selected_voice})")
+    """Generate several local voice candidates without any paid API."""
+    tts = LocalTTS()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    requested = [item.strip() for item in presets.split(",") if item.strip()]
+    for preset in requested:
+        if preset not in VOICE_PRESETS:
+            raise typer.BadParameter(f"Unknown preset {preset}. Available: {', '.join(VOICE_PRESETS)}")
+        path = output_dir / f"mr_uncut_{preset}.wav"
+        tts.synthesize(text, path, preset_name=preset)
+        typer.echo(f"{preset}: {path}")
 
-    audio = sync.synthesize(
+
+@app.command("local-test")
+def local_test(
+    script: str = typer.Option(
+        "Everybody keeps pretending this is normal. I don't buy it. I'm Mr. Uncut, and I'm going to say exactly what I think.",
+        "--script",
+    ),
+    image: Path = typer.Option(Path("assets/mr_uncut_master.jpg"), "--image"),
+    voice: str = typer.Option("electric", "--voice"),
+    tts_engine: str | None = typer.Option(None, "--tts-engine"),
+    refine_lips: bool = typer.Option(False, "--refine-lips/--no-refine-lips"),
+) -> None:
+    """Generate a complete local Mr. Uncut test: TTS -> EchoMimic -> optional MuseTalk."""
+    if not image.exists():
+        raise FileNotFoundError(image)
+
+    settings = Settings()
+    job_id = uuid.uuid4().hex[:10]
+    job_dir = settings.output_dir / "local-tests" / job_id
+    job_dir.mkdir(parents=True, exist_ok=True)
+
+    audio_path = job_dir / "mr_uncut.wav"
+    body_video = job_dir / "mr_uncut_echomimic.mp4"
+    final_video = job_dir / "mr_uncut_final.mp4"
+
+    typer.echo(f"Job: {job_id}")
+    typer.echo("1/3 Generating local voice...")
+    LocalTTS(settings).synthesize(
         script,
-        voice_id=selected_voice,
-        stability=stability,
-        similarity_boost=0.80,
+        audio_path,
+        preset_name=voice,
+        engine=tts_engine,
     )
-    typer.echo(f"Audio ready: {audio.get('url')}")
-    generation = sync.generate_from_image(
-        image,
-        audio_url=audio["url"],
-        output_name=output_name,
-    )
-    typer.echo(f"Generation submitted: {generation['id']}")
-    result = sync.wait_for_generation(generation["id"])
+
+    typer.echo("2/3 Animating Mr. Uncut with EchoMimicV3-Flash...")
+    EchoMimicFlashEngine(settings).render(image, audio_path, body_video)
+
+    if refine_lips or settings.musetalk_enabled:
+        typer.echo("3/3 Refining lip sync with MuseTalk 1.5...")
+        MuseTalkRefiner(settings).refine(body_video, audio_path, final_video)
+    else:
+        typer.echo("3/3 MuseTalk refinement disabled; using EchoMimic output.")
+        final_video.write_bytes(body_video.read_bytes())
+
+    result = {
+        "job_id": job_id,
+        "audio": str(audio_path),
+        "body_video": str(body_video),
+        "final_video": str(final_video),
+        "tts_engine": tts_engine or VOICE_PRESETS[voice].engine,
+        "voice_preset": voice,
+        "lip_refined": bool(refine_lips or settings.musetalk_enabled),
+    }
     typer.echo(json.dumps(result, indent=2))
 
 
@@ -91,7 +140,7 @@ def render(
     image: Path = typer.Option(..., "--image", exists=True, dir_okay=False),
     output_name: str = typer.Option("presenter.mp4", "--output-name"),
 ) -> None:
-    """Run the local/open-source avatar pipeline."""
+    """Run the generic pluggable avatar pipeline."""
     result = AvatarPipeline().render(
         RenderRequest(
             script=script,
