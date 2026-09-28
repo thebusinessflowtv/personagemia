@@ -18,12 +18,15 @@ on:
 
 jobs:
   render:
-    # Production avatar generation should run on our GPU machine, while GitHub remains the orchestrator.
+    # Production avatar generation runs on our GPU machine; GitHub remains the orchestrator.
     runs-on: [self-hosted, linux, gpu, personagemia]
     timeout-minutes: 360
     env:
       PERSONAGEMIA_AVATAR_ENGINE: command
       PERSONAGEMIA_AVATAR_COMMAND: ${{ vars.PERSONAGEMIA_AVATAR_COMMAND }}
+      RENDER_SCRIPT: ${{ inputs.script }}
+      RENDER_AUDIO: ${{ inputs.audio_path }}
+      RENDER_IMAGE: ${{ inputs.character_image_path }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -31,11 +34,12 @@ jobs:
           python-version: '3.11'
       - run: python -m pip install -e .
       - name: Render presenter
-        run: >-
-          personagemia render
-          --script "${{ inputs.script }}"
-          --audio "${{ inputs.audio_path }}"
-          --image "${{ inputs.character_image_path }}"
+        shell: bash
+        run: |
+          personagemia render \
+            --script "$RENDER_SCRIPT" \
+            --audio "$RENDER_AUDIO" \
+            --image "$RENDER_IMAGE"
       - uses: actions/upload-artifact@v4
         with:
           name: personagemia-render
