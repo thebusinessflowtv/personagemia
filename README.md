@@ -40,6 +40,16 @@ FFmpeg composition / export
 Final video
 ```
 
-## Status
+## Current foundation
 
-Foundation/bootstrap in progress. The repository is intentionally engine-agnostic at this stage; the next phase is to define the master character, studio image and production avatar backend.
+The bootstrap layer is now in place:
+
+- FastAPI service and CLI entrypoints.
+- Deterministic Acting Director producing structured performance beats.
+- Replaceable Avatar Engine interface.
+- Command adapter for a local/open-source GPU renderer.
+- Fixed-character and fixed-studio configuration templates.
+- GitHub Actions CI and self-hosted GPU render workflow.
+- Tests for core acting behavior.
+
+The production avatar model itself is intentionally not locked yet. The next phase is to create and approve the master fictional character and studio image, then benchmark and connect the highest-quality compatible avatar renderer behind the existing engine contract.
