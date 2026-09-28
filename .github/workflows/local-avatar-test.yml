@@ -1,0 +1,62 @@
+name: Mr Uncut Local Avatar Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        description: Short English line for Mr. Uncut
+        required: true
+        default: "Everybody keeps pretending this is normal. I don't buy it. I'm Mr. Uncut, and I'm going to say exactly what I think."
+        type: string
+      voice:
+        description: Local voice/performance preset
+        required: true
+        default: electric
+        type: choice
+        options:
+          - electric
+          - intense
+          - controlled
+          - puck
+          - adam
+          - liam
+      tts_engine:
+        description: Local TTS engine
+        required: true
+        default: chatterbox
+        type: choice
+        options:
+          - chatterbox
+          - kokoro
+      refine_lips:
+        description: Run MuseTalk 1.5 after EchoMimic
+        required: true
+        default: false
+        type: boolean
+
+jobs:
+  render:
+    runs-on: [self-hosted, linux, personagemia]
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -e .
+      - name: Validate local AI runtime
+        run: personagemia local-doctor
+      - name: Render Mr. Uncut locally
+        run: >-
+          personagemia local-test
+          --image assets/mr_uncut_master.jpg
+          --script "${{ inputs.script }}"
+          --voice "${{ inputs.voice }}"
+          --tts-engine "${{ inputs.tts_engine }}"
+          ${{ inputs.refine_lips && '--refine-lips' || '--no-refine-lips' }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mr-uncut-local-test
+          path: outputs/local-tests/
+          if-no-files-found: warn
