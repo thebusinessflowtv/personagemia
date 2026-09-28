@@ -4,7 +4,7 @@ language: en-US
 identity:
   fictional: true
   canonical_pack: external/character_pack.zip
-  master_image: character/identity/master_front.png
+  master_image: assets/mr_uncut_master.jpg
   studio_plate: external/studio_master.png
   fixed_identity: true
   fixed_wardrobe: true
@@ -53,6 +53,20 @@ voice:
   energy: very_high
   emphasis: very_high
   expressiveness: very_high
-  stability_target: low_to_medium
-  provider: elevenlabs_via_sync
-  voice_id: TBD
+  provider: local_chatterbox
+  fallback_provider: local_kokoro
+  default_performance: electric
+  chatterbox:
+    exaggeration: 0.90
+    cfg_weight: 0.28
+    reference_audio: null
+  audition_voices:
+    - am_puck
+    - am_adam
+    - am_liam
+avatar:
+  primary_engine: echomimic_v3_flash
+  lip_refiner: musetalk_1_5
+  fixed_studio: true
+  target_fps: 25
+  target_resolution: 768
