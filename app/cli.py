@@ -11,7 +11,10 @@ app = typer.Typer(help="PersonagemIA virtual creator toolkit")
 
 
 @app.command()
-def plan(script: str, output: Path = Path("performance_plan.json")) -> None:
+def plan(
+    script: str = typer.Option(..., "--script", help="English script to direct"),
+    output: Path = typer.Option(Path("performance_plan.json"), "--output"),
+) -> None:
     """Create an acting/performance plan from an English script."""
     result = ActingDirector().plan(script)
     output.write_text(json.dumps(result.model_dump(mode="json"), indent=2), encoding="utf-8")
@@ -20,10 +23,10 @@ def plan(script: str, output: Path = Path("performance_plan.json")) -> None:
 
 @app.command()
 def render(
-    script: str,
-    audio: Path,
-    image: Path,
-    output_name: str = "presenter.mp4",
+    script: str = typer.Option(..., "--script", help="English presenter script"),
+    audio: Path = typer.Option(..., "--audio", exists=True, dir_okay=False),
+    image: Path = typer.Option(..., "--image", exists=True, dir_okay=False),
+    output_name: str = typer.Option("presenter.mp4", "--output-name"),
 ) -> None:
     """Run the avatar pipeline."""
     result = AvatarPipeline().render(
