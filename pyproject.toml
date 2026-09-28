@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "personagemia"
-version = "0.2.0"
-description = "Virtual creator pipeline for Mr. Uncut, a fixed-studio AI presenter"
+version = "0.3.0"
+description = "Local-first virtual creator pipeline for Mr. Uncut"
 requires-python = ">=3.11"
 dependencies = [
   "anthropic>=0.75,<1",
