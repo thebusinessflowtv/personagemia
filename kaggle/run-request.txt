@@ -1,6 +1,6 @@
-Mr. Uncut Kaggle GPU test #4
+Mr. Uncut Kaggle GPU test #5
 voice=puck
 script=default
 engine=EchoMimicV2-accelerated
 resolution=512x512
-reason=pin transformers 4.46.3 with accelerate 1.1.1 and run dependency probe before downloads
+reason=validated binary PNG master uploaded to assets/mr_uncut_master.png and all stale JPG references removed
