@@ -19,6 +19,8 @@ from pathlib import Path
 SCRIPT_B64 = "__SCRIPT_B64__"
 VOICE = "__VOICE__"
 RENDER_SIZE = 768
+TEST_FRAMES = 72
+FPS = 24
 
 WORK = Path("/kaggle/working")
 TEMP = Path("/kaggle/temp/mr-uncut-v2")
@@ -203,19 +205,56 @@ def prepare_reference() -> Path:
     w, h = image.size
     side = min(w, h)
     left = max(0, (w - side) // 2)
-    top = max(0, (h - side) // 2)
-    image = image.crop((left, top, left + side, top + side)).resize((RENDER_SIZE, RENDER_SIZE))
+
+    # Portrait masters must be anchored at the top. The old center crop removed
+    # the character's forehead/eyes and made the generated body fill the frame.
+    top = 0 if h > w else max(0, (h - side) // 2)
+    image = image.crop((left, top, left + side, top + side))
+    image = image.resize((RENDER_SIZE, RENDER_SIZE), Image.Resampling.LANCZOS)
+
     target = TEMP / "mr_uncut_reference.png"
-    image.save(target, quality=95)
-    print(f"Reference ready: {target} ({RENDER_SIZE}x{RENDER_SIZE})", flush=True)
+    image.save(target, optimize=True)
+    print(
+        f"Reference ready: {target} source={w}x{h} crop=({left},{top},{left + side},{top + side}) "
+        f"output={RENDER_SIZE}x{RENDER_SIZE}",
+        flush=True,
+    )
     return target
+
+
+def prepare_neutral_pose() -> Path:
+    """Create blank hand-conditioning frames for a stable talking-head test.
+
+    EchoMimicV2 accelerated's draw_pose_select_v2 conditions this path with the
+    detected hands only. Reusing its demo pose forces unrelated hands/arms into
+    Mr. Uncut. A zero hand map lets audio drive the speaking motion while we
+    validate face, crop and temporal stability without phantom limbs.
+    """
+    import numpy as np
+
+    pose_dir = TEMP / "mr_uncut_neutral_pose"
+    if pose_dir.exists():
+        shutil.rmtree(pose_dir)
+    pose_dir.mkdir(parents=True, exist_ok=True)
+
+    neutral_pose = {
+        "draw_pose_params": [RENDER_SIZE, RENDER_SIZE, 0, RENDER_SIZE, 0, RENDER_SIZE],
+        "hands": np.zeros((2, 21, 2), dtype=np.float32),
+        "hands_score": np.zeros((2, 21), dtype=np.float32),
+    }
+    for index in range(TEST_FRAMES):
+        np.save(pose_dir / f"{index}.npy", neutral_pose, allow_pickle=True)
+
+    print(
+        f"Neutral hand conditioning ready: {pose_dir} ({TEST_FRAMES} frames / {TEST_FRAMES / FPS:.1f}s)",
+        flush=True,
+    )
+    return pose_dir
 
 
 def render(models: dict[str, str]) -> None:
     reference = prepare_reference()
-    pose_dir = ECHO_ROOT / "assets/halfbody_demo/pose/01"
-    if not pose_dir.exists():
-        raise FileNotFoundError(f"Missing EchoMimicV2 demo pose: {pose_dir}")
+    pose_dir = prepare_neutral_pose()
 
     config = TEMP / "mr_uncut_v2.yaml"
     inference_config = ECHO_ROOT / "configs/inference/inference_v2.yaml"
@@ -254,11 +293,11 @@ def render(models: dict[str, str]) -> None:
             "-H",
             str(RENDER_SIZE),
             "-L",
-            "240",
+            str(TEST_FRAMES),
             "--steps",
             "6",
             "--fps",
-            "24",
+            str(FPS),
         ],
         cwd=ECHO_ROOT,
     )
@@ -279,10 +318,11 @@ def main() -> None:
     if not script.strip():
         raise RuntimeError("Test script is empty")
 
-    print("=== Mr. Uncut Kaggle GPU test / EchoMimicV2 accelerated ===", flush=True)
+    print("=== Mr. Uncut Kaggle GPU calibration / EchoMimicV2 accelerated ===", flush=True)
     print(f"Voice preset: {VOICE}", flush=True)
     print(f"Script: {script}", flush=True)
     print(f"Render size: {RENDER_SIZE}x{RENDER_SIZE}", flush=True)
+    print(f"Calibration length: {TEST_FRAMES} frames ({TEST_FRAMES / FPS:.1f}s)", flush=True)
 
     install_runtime()
     make_audio(script)
@@ -294,11 +334,14 @@ def main() -> None:
             {
                 "status": "completed",
                 "engine": "EchoMimicV2-accelerated",
+                "mode": "neutral-hands-calibration",
                 "video": OUTPUT.name,
                 "audio": AUDIO.name,
                 "voice": VOICE,
                 "resolution": f"{RENDER_SIZE}x{RENDER_SIZE}",
-                "fps": 24,
+                "fps": FPS,
+                "frames": TEST_FRAMES,
+                "duration_seconds": TEST_FRAMES / FPS,
                 "steps": 6,
             },
             indent=2,
