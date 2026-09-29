@@ -1,4 +1,4 @@
-Mr. Uncut Kaggle GPU calibration #8
+Mr. Uncut Kaggle GPU calibration #9
 voice=puck
 script=default
 engine=EchoMimicV2-full
@@ -10,4 +10,5 @@ cfg=2.5
 context_frames=12
 context_overlap=8
 pose=official-schema-neutral-hands
-reason=validate identity and temporal consistency with the full EchoMimicV2 model after accelerated test 6 produced unstable, inconsistent frames and test 7 failed before render due to an incomplete pose schema
+reference=reference/mr_uncut_reference.png
+reason=retry full-quality identity and temporal consistency calibration after fixing infer.py reference path expectation
