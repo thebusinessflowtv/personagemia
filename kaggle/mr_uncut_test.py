@@ -1,7 +1,8 @@
-"""Kaggle GPU proof-of-concept for Mr. Uncut using EchoMimicV2 accelerated.
+"""Kaggle GPU quality calibration for Mr. Uncut using full EchoMimicV2.
 
-Heavy dependencies live under /kaggle/temp so Kaggle does not publish them as
-kernel outputs. Only the final audio/video/status files are written to
+This calibration deliberately favors identity and temporal consistency over
+speed. Heavy dependencies live under /kaggle/temp so Kaggle does not publish
+them as kernel outputs. Only the final audio/video/status files are written to
 /kaggle/working.
 """
 
@@ -21,6 +22,11 @@ VOICE = "__VOICE__"
 RENDER_SIZE = 768
 TEST_FRAMES = 72
 FPS = 24
+STEPS = 30
+CFG = 2.5
+CONTEXT_FRAMES = 12
+CONTEXT_OVERLAP = 8
+SEED = 3407
 
 WORK = Path("/kaggle/working")
 TEMP = Path("/kaggle/temp/mr-uncut-v2")
@@ -120,10 +126,10 @@ def download_models() -> dict[str, str]:
     ckpt_repo = "BadToBest/EchoMimicV2"
     checkpoints = {}
     for filename in (
-        "denoising_unet_acc.pth",
+        "denoising_unet.pth",
         "reference_unet.pth",
         "pose_encoder.pth",
-        "motion_module_acc.pth",
+        "motion_module.pth",
     ):
         checkpoints[filename] = hf_hub_download(
             repo_id=ckpt_repo,
@@ -167,10 +173,10 @@ def download_models() -> dict[str, str]:
     return {
         "base": str(base_model),
         "vae": str(vae_model),
-        "denoising": checkpoints["denoising_unet_acc.pth"],
+        "denoising": checkpoints["denoising_unet.pth"],
         "reference": checkpoints["reference_unet.pth"],
         "pose": checkpoints["pose_encoder.pth"],
-        "motion": checkpoints["motion_module_acc.pth"],
+        "motion": checkpoints["motion_module.pth"],
         "audio": str(tiny),
     }
 
@@ -205,9 +211,6 @@ def prepare_reference() -> Path:
     w, h = image.size
     side = min(w, h)
     left = max(0, (w - side) // 2)
-
-    # Portrait masters must be anchored at the top. The old center crop removed
-    # the character's forehead/eyes and made the generated body fill the frame.
     top = 0 if h > w else max(0, (h - side) // 2)
     image = image.crop((left, top, left + side, top + side))
     image = image.resize((RENDER_SIZE, RENDER_SIZE), Image.Resampling.LANCZOS)
@@ -223,13 +226,7 @@ def prepare_reference() -> Path:
 
 
 def prepare_neutral_pose() -> Path:
-    """Create blank hand-conditioning frames for a stable talking-head test.
-
-    EchoMimicV2 accelerated's draw_pose_select_v2 conditions this path with the
-    detected hands only. Reusing its demo pose forces unrelated hands/arms into
-    Mr. Uncut. A zero hand map lets audio drive the speaking motion while we
-    validate face, crop and temporal stability without phantom limbs.
-    """
+    """Create neutral hand-conditioning frames for an identity-stability test."""
     import numpy as np
 
     pose_dir = TEMP / "mr_uncut_neutral_pose"
@@ -256,7 +253,7 @@ def render(models: dict[str, str]) -> None:
     reference = prepare_reference()
     pose_dir = prepare_neutral_pose()
 
-    config = TEMP / "mr_uncut_v2.yaml"
+    config = TEMP / "mr_uncut_v2_quality.yaml"
     inference_config = ECHO_ROOT / "configs/inference/inference_v2.yaml"
     config.write_text(
         "\n".join(
@@ -270,22 +267,18 @@ def render(models: dict[str, str]) -> None:
                 f'audio_model_path: "{models["audio"]}"',
                 f'inference_config: "{inference_config}"',
                 "weight_dtype: 'fp16'",
-                "test_cases:",
-                f'  "{reference}":',
-                f'    - "{AUDIO}"',
-                f'    - "{pose_dir}"',
                 "",
             ]
         ),
         encoding="utf-8",
     )
 
-    disk_report("before render")
+    disk_report("before quality render")
     os.environ["FFMPEG_PATH"] = "/usr/bin"
     run(
         [
             sys.executable,
-            "infer_acc.py",
+            "infer.py",
             "--config",
             str(config),
             "-W",
@@ -295,20 +288,40 @@ def render(models: dict[str, str]) -> None:
             "-L",
             str(TEST_FRAMES),
             "--steps",
-            "6",
+            str(STEPS),
+            "--cfg",
+            str(CFG),
             "--fps",
             str(FPS),
+            "--seed",
+            str(SEED),
+            "--context_frames",
+            str(CONTEXT_FRAMES),
+            "--context_overlap",
+            str(CONTEXT_OVERLAP),
+            "--ref_images_dir",
+            str(TEMP),
+            "--refimg_name",
+            reference.name,
+            "--audio_dir",
+            str(WORK),
+            "--audio_name",
+            AUDIO.name,
+            "--pose_dir",
+            str(TEMP),
+            "--pose_name",
+            pose_dir.name,
         ],
         cwd=ECHO_ROOT,
     )
 
     candidates = sorted(
-        (ECHO_ROOT / "output").rglob("*_sig.mp4"),
+        (ECHO_ROOT / "outputs").rglob("*_sig.mp4"),
         key=lambda path: path.stat().st_mtime,
         reverse=True,
     )
     if not candidates:
-        raise RuntimeError("EchoMimicV2 completed without producing *_sig.mp4")
+        raise RuntimeError("Full EchoMimicV2 completed without producing *_sig.mp4")
     shutil.copy2(candidates[0], OUTPUT)
     print(f"Video ready: {OUTPUT} ({OUTPUT.stat().st_size/1024/1024:.1f} MB)", flush=True)
 
@@ -318,11 +331,15 @@ def main() -> None:
     if not script.strip():
         raise RuntimeError("Test script is empty")
 
-    print("=== Mr. Uncut Kaggle GPU calibration / EchoMimicV2 accelerated ===", flush=True)
+    print("=== Mr. Uncut Kaggle quality calibration / full EchoMimicV2 ===", flush=True)
     print(f"Voice preset: {VOICE}", flush=True)
     print(f"Script: {script}", flush=True)
     print(f"Render size: {RENDER_SIZE}x{RENDER_SIZE}", flush=True)
     print(f"Calibration length: {TEST_FRAMES} frames ({TEST_FRAMES / FPS:.1f}s)", flush=True)
+    print(
+        f"Quality settings: steps={STEPS} cfg={CFG} context={CONTEXT_FRAMES} overlap={CONTEXT_OVERLAP} seed={SEED}",
+        flush=True,
+    )
 
     install_runtime()
     make_audio(script)
@@ -333,8 +350,8 @@ def main() -> None:
         json.dumps(
             {
                 "status": "completed",
-                "engine": "EchoMimicV2-accelerated",
-                "mode": "neutral-hands-calibration",
+                "engine": "EchoMimicV2-full",
+                "mode": "identity-temporal-consistency-calibration",
                 "video": OUTPUT.name,
                 "audio": AUDIO.name,
                 "voice": VOICE,
@@ -342,7 +359,11 @@ def main() -> None:
                 "fps": FPS,
                 "frames": TEST_FRAMES,
                 "duration_seconds": TEST_FRAMES / FPS,
-                "steps": 6,
+                "steps": STEPS,
+                "cfg": CFG,
+                "context_frames": CONTEXT_FRAMES,
+                "context_overlap": CONTEXT_OVERLAP,
+                "seed": SEED,
             },
             indent=2,
         ),
