@@ -73,10 +73,6 @@ def install_runtime() -> None:
     run(["git", "clone", "--depth", "1", "https://github.com/thebusinessflowtv/personagemia.git", str(REPO)])
     run(["git", "clone", "--depth", "1", "https://github.com/antgroup/echomimic_v2.git", str(ECHO_ROOT)])
 
-    # Keep Kaggle's CUDA-enabled torch/torchvision. Install only inference-time deps.
-    # EchoMimicV2 publishes accelerate==1.1.1. Pin transformers to the matching
-    # 4.46.3 generation instead of letting pip install a newer release that expects
-    # accelerate APIs unavailable in 1.1.1.
     packages = [
         "numpy==1.26.4",
         "diffusers==0.31.0",
@@ -102,7 +98,6 @@ def install_runtime() -> None:
     ]
     run([sys.executable, "-m", "pip", "install", "-q", "--no-cache-dir", *packages])
 
-    # Fail early with a tiny compatibility probe before spending time on model downloads.
     sh(
         f"{sys.executable} - <<'PY'\n"
         "from transformers import AlbertModel\n"
@@ -119,7 +114,6 @@ def install_runtime() -> None:
 def download_models() -> dict[str, str]:
     from huggingface_hub import hf_hub_download, snapshot_download
 
-    # Only the accelerated checkpoints actually referenced by infer_acc.py.
     ckpt_repo = "BadToBest/EchoMimicV2"
     checkpoints = {}
     for filename in (
@@ -135,7 +129,6 @@ def download_models() -> dict[str, str]:
         )
         disk_report(f"after {filename}")
 
-    # EchoMimicV2 initializes its UNets from only the UNet subfolder of this repo.
     base_model = snapshot_download(
         repo_id="lambdalabs/sd-image-variations-diffusers",
         allow_patterns=["unet/*"],
@@ -150,7 +143,6 @@ def download_models() -> dict[str, str]:
     )
     disk_report("after VAE")
 
-    # Whisper tiny is enough for the V2 audio processor and is only ~75 MB.
     audio_dir = TEMP / "audio_processor"
     audio_dir.mkdir(parents=True, exist_ok=True)
     tiny = audio_dir / "tiny.pt"
@@ -202,7 +194,7 @@ def make_audio(script: str) -> None:
 def prepare_reference() -> Path:
     from PIL import Image
 
-    source = REPO / "assets/mr_uncut_master.jpg"
+    source = REPO / "assets/mr_uncut_master.png"
     if not source.exists():
         raise FileNotFoundError(f"Missing Mr. Uncut master image: {source}")
 
