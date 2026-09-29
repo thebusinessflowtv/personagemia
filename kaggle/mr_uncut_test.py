@@ -44,6 +44,7 @@ os.environ.update(
         "HF_HOME": str(HF_CACHE),
         "HUGGINGFACE_HUB_CACHE": str(HF_CACHE / "hub"),
         "TOKENIZERS_PARALLELISM": "false",
+        "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True",
     }
 )
 
@@ -226,7 +227,8 @@ def prepare_reference() -> Path:
 
 
 def prepare_neutral_pose() -> Path:
-    """Create neutral hand-conditioning frames for an identity-stability test."""
+    """Keep EchoMimic's official pose schema but remove all hand motion."""
+    import copy
     import numpy as np
 
     pose_dir = TEMP / "mr_uncut_neutral_pose"
@@ -234,16 +236,23 @@ def prepare_neutral_pose() -> Path:
         shutil.rmtree(pose_dir)
     pose_dir.mkdir(parents=True, exist_ok=True)
 
-    neutral_pose = {
-        "draw_pose_params": [RENDER_SIZE, RENDER_SIZE, 0, RENDER_SIZE, 0, RENDER_SIZE],
-        "hands": np.zeros((2, 21, 2), dtype=np.float32),
-        "hands_score": np.zeros((2, 21), dtype=np.float32),
-    }
+    template_path = ECHO_ROOT / "assets/halfbody_demo/pose/01/0.npy"
+    if not template_path.exists():
+        raise FileNotFoundError(f"Missing official EchoMimic pose template: {template_path}")
+
+    template = np.load(template_path, allow_pickle=True).tolist()
+    if "bodies" not in template or "hands" not in template or "hands_score" not in template:
+        raise RuntimeError("Official EchoMimic pose template has an unexpected schema")
+
     for index in range(TEST_FRAMES):
+        neutral_pose = copy.deepcopy(template)
+        neutral_pose["hands"] = np.zeros_like(neutral_pose["hands"], dtype=np.float32)
+        neutral_pose["hands_score"] = np.zeros_like(neutral_pose["hands_score"], dtype=np.float32)
         np.save(pose_dir / f"{index}.npy", neutral_pose, allow_pickle=True)
 
     print(
-        f"Neutral hand conditioning ready: {pose_dir} ({TEST_FRAMES} frames / {TEST_FRAMES / FPS:.1f}s)",
+        f"Neutral hand conditioning ready from official schema: {pose_dir} "
+        f"({TEST_FRAMES} frames / {TEST_FRAMES / FPS:.1f}s)",
         flush=True,
     )
     return pose_dir
