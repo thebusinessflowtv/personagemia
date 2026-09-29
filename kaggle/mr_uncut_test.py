@@ -1,7 +1,8 @@
-"""Kaggle GPU proof-of-concept for Mr. Uncut.
+"""Kaggle GPU proof-of-concept for Mr. Uncut using EchoMimicV2 accelerated.
 
-This file is used as a template by the GitHub Actions workflow. The workflow replaces
-SCRIPT_B64 and VOICE before pushing the kernel to Kaggle.
+Heavy dependencies live under /kaggle/temp so Kaggle does not publish them as
+kernel outputs. Only the final audio/video/status files are written to
+/kaggle/working.
 """
 
 from __future__ import annotations
@@ -19,16 +20,27 @@ SCRIPT_B64 = "__SCRIPT_B64__"
 VOICE = "__VOICE__"
 
 WORK = Path("/kaggle/working")
-REPO = WORK / "personagemia"
-AI_ROOT = WORK / "personagemia-ai"
-ECHO_ROOT = AI_ROOT / "engines/echomimic_v3"
-MODEL_ROOT = AI_ROOT / "models/echomimic_v3/flash"
+TEMP = Path("/kaggle/temp/mr-uncut-v2")
+REPO = TEMP / "personagemia"
+ECHO_ROOT = TEMP / "echomimic_v2"
+HF_CACHE = TEMP / "hf-cache"
 OUTPUT = WORK / "mr_uncut_kaggle_test.mp4"
 AUDIO = WORK / "mr_uncut_voice.wav"
+INFO = WORK / "mr_uncut_run_info.json"
+ERROR = WORK / "mr_uncut_error.txt"
+
+os.environ.update(
+    {
+        "PIP_NO_CACHE_DIR": "1",
+        "HF_HOME": str(HF_CACHE),
+        "HUGGINGFACE_HUB_CACHE": str(HF_CACHE / "hub"),
+        "TOKENIZERS_PARALLELISM": "false",
+    }
+)
 
 
 def run(command: list[str], *, cwd: Path | None = None) -> None:
-    print("+", " ".join(command), flush=True)
+    print("+", " ".join(str(part) for part in command), flush=True)
     subprocess.run(command, cwd=cwd, check=True)
 
 
@@ -37,73 +49,120 @@ def sh(command: str, *, cwd: Path | None = None) -> None:
     subprocess.run(["bash", "-lc", command], cwd=cwd, check=True)
 
 
+def disk_report(label: str) -> None:
+    usage = shutil.disk_usage("/kaggle")
+    gib = 1024**3
+    print(
+        f"DISK {label}: total={usage.total/gib:.1f}GiB "
+        f"used={usage.used/gib:.1f}GiB free={usage.free/gib:.1f}GiB",
+        flush=True,
+    )
+
+
 def install_runtime() -> None:
+    TEMP.mkdir(parents=True, exist_ok=True)
+    disk_report("start")
     run(["nvidia-smi"])
     sh("apt-get -qq update && apt-get -qq -y install espeak-ng ffmpeg git")
 
     if REPO.exists():
         shutil.rmtree(REPO)
+    if ECHO_ROOT.exists():
+        shutil.rmtree(ECHO_ROOT)
+
     run(["git", "clone", "--depth", "1", "https://github.com/thebusinessflowtv/personagemia.git", str(REPO)])
+    run(["git", "clone", "--depth", "1", "https://github.com/antgroup/echomimic_v2.git", str(ECHO_ROOT)])
 
-    run([sys.executable, "-m", "pip", "install", "-q", "--upgrade", "pip"])
-    run([sys.executable, "-m", "pip", "install", "-q", "-e", str(REPO)])
-    run(
-        [
-            sys.executable,
-            "-m",
-            "pip",
-            "install",
-            "-q",
-            "kokoro>=0.9.4",
-            "soundfile",
-            "misaki[en]",
-            "huggingface_hub>=0.27",
-            "pyloudnorm",
-        ]
-    )
-
-    ECHO_ROOT.parent.mkdir(parents=True, exist_ok=True)
-    if not ECHO_ROOT.exists():
-        run(["git", "clone", "--depth", "1", "https://github.com/antgroup/echomimic_v3.git", str(ECHO_ROOT)])
-
-    # Reuse Kaggle's CUDA-enabled PyTorch instead of downloading another giant torch wheel.
-    filtered = WORK / "echomimic-requirements.txt"
-    requirements = (ECHO_ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines()
-    skipped_prefixes = ("torch", "tensorflow", "gradio", "tensorboard", "retina-face")
-    filtered.write_text(
-        "\n".join(
-            line
-            for line in requirements
-            if line.strip() and not line.strip().lower().startswith(skipped_prefixes)
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    run([sys.executable, "-m", "pip", "install", "-q", "-r", str(filtered)])
+    # Keep Kaggle's CUDA-enabled torch/torchvision. Install only inference-time deps.
+    packages = [
+        "numpy==1.26.4",
+        "diffusers==0.31.0",
+        "transformers>=4.46.3",
+        "accelerate==1.1.1",
+        "torchmetrics",
+        "torchtyping",
+        "einops==0.8.0",
+        "omegaconf==2.3.0",
+        "opencv-python-headless==4.10.0.84",
+        "av==13.1.0",
+        "decord==0.6.0",
+        "imageio==2.36.0",
+        "imageio-ffmpeg==0.5.1",
+        "scipy==1.14.1",
+        "ffmpeg-python",
+        "soundfile",
+        "moviepy==1.0.3",
+        "huggingface_hub>=0.27",
+        "matplotlib",
+        "kokoro>=0.9.4",
+        "misaki[en]",
+    ]
+    run([sys.executable, "-m", "pip", "install", "-q", "--no-cache-dir", *packages])
+    disk_report("after runtime")
 
 
-def download_models() -> None:
+def download_models() -> dict[str, str]:
     from huggingface_hub import hf_hub_download, snapshot_download
 
-    MODEL_ROOT.mkdir(parents=True, exist_ok=True)
-    snapshot_download(
-        repo_id="alibaba-pai/Wan2.1-Fun-V1.1-1.3B-InP",
-        local_dir=MODEL_ROOT / "Wan2.1-Fun-V1.1-1.3B-InP",
-    )
-    snapshot_download(
-        repo_id="TencentGameMate/chinese-wav2vec2-base",
-        local_dir=MODEL_ROOT / "chinese-wav2vec2-base",
-    )
-    source = Path(
-        hf_hub_download(
-            repo_id="BadToBest/EchoMimicV3",
-            filename="echomimicv3-flash-pro/diffusion_pytorch_model.safetensors",
+    # Only the accelerated checkpoints actually referenced by infer_acc.py.
+    ckpt_repo = "BadToBest/EchoMimicV2"
+    checkpoints = {}
+    for filename in (
+        "denoising_unet_acc.pth",
+        "reference_unet.pth",
+        "pose_encoder.pth",
+        "motion_module_acc.pth",
+    ):
+        checkpoints[filename] = hf_hub_download(
+            repo_id=ckpt_repo,
+            filename=filename,
+            cache_dir=HF_CACHE,
         )
+        disk_report(f"after {filename}")
+
+    # EchoMimicV2 initializes its UNets from only the UNet subfolder of this repo.
+    base_model = snapshot_download(
+        repo_id="lambdalabs/sd-image-variations-diffusers",
+        allow_patterns=["unet/*"],
+        cache_dir=HF_CACHE,
     )
-    target = MODEL_ROOT / "transformer/diffusion_pytorch_model.safetensors"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    if not target.exists() or target.stat().st_size != source.stat().st_size:
-        shutil.copy2(source, target)
+    disk_report("after base UNet")
+
+    vae_model = snapshot_download(
+        repo_id="stabilityai/sd-vae-ft-mse",
+        allow_patterns=["config.json", "diffusion_pytorch_model.*"],
+        cache_dir=HF_CACHE,
+    )
+    disk_report("after VAE")
+
+    # Whisper tiny is enough for the V2 audio processor and is only ~75 MB.
+    audio_dir = TEMP / "audio_processor"
+    audio_dir.mkdir(parents=True, exist_ok=True)
+    tiny = audio_dir / "tiny.pt"
+    if not tiny.exists():
+        run(
+            [
+                "curl",
+                "-L",
+                "--fail",
+                "--retry",
+                "3",
+                "-o",
+                str(tiny),
+                "https://openaipublic.azureedge.net/main/whisper/models/65147644a518d12f04e32d6f3b26facc3f8dd46e5390956a9424a650c0ce22b9/tiny.pt",
+            ]
+        )
+    disk_report("models ready")
+
+    return {
+        "base": str(base_model),
+        "vae": str(vae_model),
+        "denoising": checkpoints["denoising_unet_acc.pth"],
+        "reference": checkpoints["reference_unet.pth"],
+        "pose": checkpoints["pose_encoder.pth"],
+        "motion": checkpoints["motion_module_acc.pth"],
+        "audio": str(tiny),
+    }
 
 
 def make_audio(script: str) -> None:
@@ -122,29 +181,88 @@ def make_audio(script: str) -> None:
     if not chunks:
         raise RuntimeError("Kokoro produced no audio")
     sf.write(AUDIO, np.concatenate(chunks), 24000)
+    print(f"Audio ready: {AUDIO} ({AUDIO.stat().st_size/1024/1024:.1f} MB)", flush=True)
 
 
-def render() -> None:
-    os.environ.update(
-        {
-            "PERSONAGEMIA_AI_ROOT": str(AI_ROOT),
-            "PERSONAGEMIA_ECHO_ROOT": str(ECHO_ROOT),
-            "PERSONAGEMIA_ECHO_PYTHON": sys.executable,
-            "PERSONAGEMIA_ECHO_MODEL_ROOT": str(MODEL_ROOT),
-            "PERSONAGEMIA_ECHO_OUTPUT_DIR": str(WORK / "echo-output"),
-            # T4/Turing: use FP16 rather than BF16 for maximum compatibility.
-            "PERSONAGEMIA_ECHO_WEIGHT_DTYPE": "float16",
-            # Start conservatively. Once the proof-of-concept passes we can benchmark 640/768.
-            "PERSONAGEMIA_ECHO_SIZE": "512",
-            "PERSONAGEMIA_ECHO_STEPS": "8",
-            "PERSONAGEMIA_ECHO_AUDIO_GUIDANCE_SCALE": "2.0",
-        }
+def prepare_reference() -> Path:
+    from PIL import Image
+
+    source = REPO / "assets/mr_uncut_master.jpg"
+    if not source.exists():
+        raise FileNotFoundError(f"Missing Mr. Uncut master image: {source}")
+
+    image = Image.open(source).convert("RGB")
+    w, h = image.size
+    side = min(w, h)
+    left = max(0, (w - side) // 2)
+    top = max(0, (h - side) // 2)
+    image = image.crop((left, top, left + side, top + side)).resize((512, 512))
+    target = TEMP / "mr_uncut_reference.png"
+    image.save(target, quality=95)
+    return target
+
+
+def render(models: dict[str, str]) -> None:
+    reference = prepare_reference()
+    pose_dir = ECHO_ROOT / "assets/halfbody_demo/pose/01"
+    if not pose_dir.exists():
+        raise FileNotFoundError(f"Missing EchoMimicV2 demo pose: {pose_dir}")
+
+    config = TEMP / "mr_uncut_v2.yaml"
+    inference_config = ECHO_ROOT / "configs/inference/inference_v2.yaml"
+    config.write_text(
+        "\n".join(
+            [
+                f'pretrained_base_model_path: "{models["base"]}"',
+                f'pretrained_vae_path: "{models["vae"]}"',
+                f'denoising_unet_path: "{models["denoising"]}"',
+                f'reference_unet_path: "{models["reference"]}"',
+                f'pose_encoder_path: "{models["pose"]}"',
+                f'motion_module_path: "{models["motion"]}"',
+                f'audio_model_path: "{models["audio"]}"',
+                f'inference_config: "{inference_config}"',
+                "weight_dtype: 'fp16'",
+                "test_cases:",
+                f'  "{reference}":',
+                f'    - "{AUDIO}"',
+                f'    - "{pose_dir}"',
+                "",
+            ]
+        ),
+        encoding="utf-8",
     )
-    sys.path.insert(0, str(REPO))
-    from app.local_avatar import EchoMimicFlashEngine
 
-    image = REPO / "assets/mr_uncut_master.jpg"
-    EchoMimicFlashEngine().render(image, AUDIO, OUTPUT)
+    disk_report("before render")
+    os.environ["FFMPEG_PATH"] = "/usr/bin"
+    run(
+        [
+            sys.executable,
+            "infer_acc.py",
+            "--config",
+            str(config),
+            "-W",
+            "512",
+            "-H",
+            "512",
+            "-L",
+            "240",
+            "--steps",
+            "6",
+            "--fps",
+            "24",
+        ],
+        cwd=ECHO_ROOT,
+    )
+
+    candidates = sorted(
+        (ECHO_ROOT / "output").rglob("*_sig.mp4"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    if not candidates:
+        raise RuntimeError("EchoMimicV2 completed without producing *_sig.mp4")
+    shutil.copy2(candidates[0], OUTPUT)
+    print(f"Video ready: {OUTPUT} ({OUTPUT.stat().st_size/1024/1024:.1f} MB)", flush=True)
 
 
 def main() -> None:
@@ -152,24 +270,32 @@ def main() -> None:
     if not script.strip():
         raise RuntimeError("Test script is empty")
 
-    print("=== Mr. Uncut Kaggle GPU test ===", flush=True)
+    print("=== Mr. Uncut Kaggle GPU test / EchoMimicV2 accelerated ===", flush=True)
     print(f"Voice preset: {VOICE}", flush=True)
     print(f"Script: {script}", flush=True)
 
     install_runtime()
-    download_models()
     make_audio(script)
-    render()
+    models = download_models()
+    render(models)
 
-    info = {
-        "status": "completed",
-        "video": OUTPUT.name,
-        "audio": AUDIO.name,
-        "voice": VOICE,
-        "echo_size": 512,
-        "weight_dtype": "float16",
-    }
-    (WORK / "mr_uncut_run_info.json").write_text(json.dumps(info, indent=2), encoding="utf-8")
+    INFO.write_text(
+        json.dumps(
+            {
+                "status": "completed",
+                "engine": "EchoMimicV2-accelerated",
+                "video": OUTPUT.name,
+                "audio": AUDIO.name,
+                "voice": VOICE,
+                "resolution": "512x512",
+                "fps": 24,
+                "steps": 6,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    disk_report("done")
     print(f"DONE: {OUTPUT}", flush=True)
 
 
@@ -179,5 +305,6 @@ if __name__ == "__main__":
     except Exception:
         error = traceback.format_exc()
         print(error, flush=True)
-        (WORK / "mr_uncut_error.txt").write_text(error, encoding="utf-8")
+        ERROR.write_text(error, encoding="utf-8")
+        disk_report("failure")
         raise
