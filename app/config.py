@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     kokoro_voice: str = "am_puck"
     kokoro_speed: float = 1.12
 
-    # EchoMimicV3-Flash: main body/face animation engine.
+    # EchoMimicV3-Flash remains available as the ultra motion engine.
     echo_root: Path = Path.home() / ".personagemia-ai/engines/echomimic_v3"
     echo_python: Path = Path.home() / ".personagemia-ai/venvs/echomimic/bin/python"
     echo_model_root: Path = Path.home() / ".personagemia-ai/models/echomimic_v3/flash"
@@ -45,7 +45,28 @@ class Settings(BaseSettings):
     echo_seed: int = 43
     echo_weight_dtype: str = "bfloat16"
 
-    # MuseTalk 1.5 is an optional lip-sync refinement stage after EchoMimic.
+    # Avatar Quality V2: short deterministic motion chunks + temporal lip refinement.
+    quality_profile: str = "v2"
+    avatar_chunk_seconds: float = 3.0
+    avatar_chunk_overlap_seconds: float = 0.12
+    quality_seed: int = 3407
+
+    # LatentSync 1.5 is the preferred mouth/teeth refiner for a 16 GB-class GPU.
+    latentsync_enabled: bool = True
+    latentsync_root: Path = Path.home() / ".personagemia-ai/engines/LatentSync"
+    latentsync_python: Path = Path.home() / ".personagemia-ai/venvs/latentsync/bin/python"
+    latentsync_checkpoint: Path = Path.home() / ".personagemia-ai/models/latentsync/latentsync_unet.pt"
+    latentsync_steps: int = 30
+    latentsync_guidance_scale: float = 1.35
+
+    # Fixed presentation layer. The studio is composited, never regenerated per frame.
+    studio_background: Path = Path("assets/studio/mr_uncut_garage_bg_800x450.jpg")
+    final_width: int = 1280
+    final_height: int = 720
+    subject_height_ratio: float = 0.93
+    alpha_temporal_history: float = 0.22
+
+    # MuseTalk remains an optional comparison/refinement engine.
     musetalk_enabled: bool = False
     musetalk_root: Path = Path.home() / ".personagemia-ai/engines/MuseTalk"
     musetalk_python: Path = Path.home() / ".personagemia-ai/venvs/musetalk/bin/python"
