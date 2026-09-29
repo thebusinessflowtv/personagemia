@@ -1,6 +1,6 @@
-Mr. Uncut Kaggle GPU test requested 2026-09-28T22:07:00-03:00
+Mr. Uncut Kaggle GPU test #4
 voice=puck
 script=default
 engine=EchoMimicV2-accelerated
 resolution=512x512
-reason=retry after V3 disk exhaustion; compact temp-only model layout
+reason=pin transformers 4.46.3 with accelerate 1.1.1 and run dependency probe before downloads
