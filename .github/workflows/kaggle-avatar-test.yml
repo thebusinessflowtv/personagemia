@@ -1,0 +1,126 @@
+name: Mr Uncut Kaggle GPU Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        description: Short English line for Mr. Uncut
+        required: true
+        default: "Everybody keeps pretending this is normal. I don't buy it. I'm Mr. Uncut, and I'm going to say exactly what I think."
+        type: string
+      voice:
+        description: Free Kokoro test voice
+        required: true
+        default: puck
+        type: choice
+        options:
+          - puck
+          - adam
+          - liam
+
+jobs:
+  kaggle-render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+      KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+      TEST_SCRIPT: ${{ inputs.script }}
+      TEST_VOICE: ${{ inputs.voice }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Kaggle CLI
+        run: python -m pip install --upgrade kaggle
+
+      - name: Verify Kaggle credentials
+        run: |
+          if [ -z "$KAGGLE_API_TOKEN" ]; then
+            echo 'Missing repository secret KAGGLE_API_TOKEN.'
+            exit 2
+          fi
+          if [ -z "$KAGGLE_USERNAME" ]; then
+            echo 'Missing repository secret KAGGLE_USERNAME.'
+            exit 2
+          fi
+          kaggle config view
+
+      - name: Prepare private Kaggle kernel
+        run: |
+          python - <<'PY'
+          import base64
+          import json
+          import os
+          from pathlib import Path
+
+          source = Path('kaggle/mr_uncut_test.py').read_text(encoding='utf-8')
+          encoded = base64.b64encode(os.environ['TEST_SCRIPT'].encode('utf-8')).decode('ascii')
+          source = source.replace('__SCRIPT_B64__', encoded)
+          source = source.replace('__VOICE__', os.environ['TEST_VOICE'])
+
+          build = Path('build/kaggle-mr-uncut')
+          build.mkdir(parents=True, exist_ok=True)
+          (build / 'mr_uncut_test.py').write_text(source, encoding='utf-8')
+
+          username = os.environ['KAGGLE_USERNAME']
+          metadata = {
+              'id': f'{username}/mr-uncut-gpu-test',
+              'title': 'Mr Uncut GPU Test',
+              'code_file': 'mr_uncut_test.py',
+              'language': 'python',
+              'kernel_type': 'script',
+              'is_private': True,
+              'enable_gpu': True,
+              'enable_internet': True,
+              'machine_shape': 'NvidiaTeslaT4',
+              'dataset_sources': [],
+              'competition_sources': [],
+              'kernel_sources': [],
+              'model_sources': [],
+          }
+          (build / 'kernel-metadata.json').write_text(
+              json.dumps(metadata, indent=2), encoding='utf-8'
+          )
+          PY
+
+      - name: Submit render to free Kaggle GPU
+        run: kaggle kernels push -p build/kaggle-mr-uncut --accelerator NvidiaTeslaT4 --timeout 30000
+
+      - name: Wait for Kaggle render
+        run: |
+          KERNEL="$KAGGLE_USERNAME/mr-uncut-gpu-test"
+          for i in $(seq 1 150); do
+            STATUS="$(kaggle kernels status "$KERNEL" 2>&1 || true)"
+            echo "$STATUS"
+            NORMALIZED="$(printf '%s' "$STATUS" | tr '[:upper:]' '[:lower:]')"
+            if printf '%s' "$NORMALIZED" | grep -qE 'complete|completed'; then
+              exit 0
+            fi
+            if printf '%s' "$NORMALIZED" | grep -qE 'error|failed|cancel'; then
+              echo 'Kaggle render failed. Fetching logs:'
+              kaggle kernels logs "$KERNEL" || true
+              exit 1
+            fi
+            sleep 60
+          done
+          echo 'Timed out waiting for Kaggle render.'
+          kaggle kernels logs "$KERNEL" || true
+          exit 1
+
+      - name: Download Kaggle output
+        if: always()
+        run: |
+          mkdir -p outputs/kaggle
+          kaggle kernels output "$KAGGLE_USERNAME/mr-uncut-gpu-test" -p outputs/kaggle -o || true
+
+      - name: Upload Mr. Uncut result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mr-uncut-kaggle-test
+          path: outputs/kaggle/
+          if-no-files-found: warn
