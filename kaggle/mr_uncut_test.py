@@ -18,6 +18,7 @@ from pathlib import Path
 
 SCRIPT_B64 = "__SCRIPT_B64__"
 VOICE = "__VOICE__"
+RENDER_SIZE = 768
 
 WORK = Path("/kaggle/working")
 TEMP = Path("/kaggle/temp/mr-uncut-v2")
@@ -203,9 +204,10 @@ def prepare_reference() -> Path:
     side = min(w, h)
     left = max(0, (w - side) // 2)
     top = max(0, (h - side) // 2)
-    image = image.crop((left, top, left + side, top + side)).resize((512, 512))
+    image = image.crop((left, top, left + side, top + side)).resize((RENDER_SIZE, RENDER_SIZE))
     target = TEMP / "mr_uncut_reference.png"
     image.save(target, quality=95)
+    print(f"Reference ready: {target} ({RENDER_SIZE}x{RENDER_SIZE})", flush=True)
     return target
 
 
@@ -248,9 +250,9 @@ def render(models: dict[str, str]) -> None:
             "--config",
             str(config),
             "-W",
-            "512",
+            str(RENDER_SIZE),
             "-H",
-            "512",
+            str(RENDER_SIZE),
             "-L",
             "240",
             "--steps",
@@ -280,6 +282,7 @@ def main() -> None:
     print("=== Mr. Uncut Kaggle GPU test / EchoMimicV2 accelerated ===", flush=True)
     print(f"Voice preset: {VOICE}", flush=True)
     print(f"Script: {script}", flush=True)
+    print(f"Render size: {RENDER_SIZE}x{RENDER_SIZE}", flush=True)
 
     install_runtime()
     make_audio(script)
@@ -294,7 +297,7 @@ def main() -> None:
                 "video": OUTPUT.name,
                 "audio": AUDIO.name,
                 "voice": VOICE,
-                "resolution": "512x512",
+                "resolution": f"{RENDER_SIZE}x{RENDER_SIZE}",
                 "fps": 24,
                 "steps": 6,
             },
