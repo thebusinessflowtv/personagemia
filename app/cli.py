@@ -6,7 +6,7 @@ import typer
 
 from app.acting import ActingDirector
 from app.config import Settings
-from app.local_avatar import EchoMimicFlashEngine, MuseTalkRefiner
+from app.local_avatar import AvatarQualityV2Engine, EchoMimicFlashEngine, LatentSyncRefiner
 from app.local_doctor import run_doctor
 from app.local_tts import VOICE_PRESETS, LocalTTS
 from app.models import RenderRequest
@@ -84,12 +84,13 @@ def local_test(
         "Everybody keeps pretending this is normal. I don't buy it. I'm Mr. Uncut, and I'm going to say exactly what I think.",
         "--script",
     ),
-    image: Path = typer.Option(Path("assets/mr_uncut_master.jpg"), "--image"),
+    image: Path = typer.Option(Path("assets/mr_uncut_master.png"), "--image"),
     voice: str = typer.Option("electric", "--voice"),
     tts_engine: str | None = typer.Option(None, "--tts-engine"),
-    refine_lips: bool = typer.Option(False, "--refine-lips/--no-refine-lips"),
+    quality_v2: bool = typer.Option(True, "--quality-v2/--legacy-motion"),
+    refine_lips: bool = typer.Option(True, "--refine-lips/--no-refine-lips"),
 ) -> None:
-    """Generate a complete local Mr. Uncut test: TTS -> EchoMimic -> optional MuseTalk."""
+    """Generate Mr. Uncut with short-chunk motion and temporal lip refinement by default."""
     if not image.exists():
         raise FileNotFoundError(image)
 
@@ -111,15 +112,23 @@ def local_test(
         engine=tts_engine,
     )
 
-    typer.echo("2/3 Animating Mr. Uncut with EchoMimicV3-Flash...")
-    EchoMimicFlashEngine(settings).render(image, audio_path, body_video)
-
-    if refine_lips or settings.musetalk_enabled:
-        typer.echo("3/3 Refining lip sync with MuseTalk 1.5...")
-        MuseTalkRefiner(settings).refine(body_video, audio_path, final_video)
+    if quality_v2:
+        typer.echo("2/3 Running Avatar Quality V2 in short deterministic chunks...")
+        typer.echo("3/3 Refining mouth/teeth temporal consistency with LatentSync 1.5...")
+        AvatarQualityV2Engine(settings).render(image, audio_path, final_video)
+        body_video = final_video
+        lip_refiner = "latentsync-1.5"
     else:
-        typer.echo("3/3 MuseTalk refinement disabled; using EchoMimic output.")
-        final_video.write_bytes(body_video.read_bytes())
+        typer.echo("2/3 Animating Mr. Uncut with EchoMimicV3-Flash...")
+        EchoMimicFlashEngine(settings).render(image, audio_path, body_video)
+        if refine_lips:
+            typer.echo("3/3 Refining lip sync with LatentSync 1.5...")
+            LatentSyncRefiner(settings).refine(body_video, audio_path, final_video)
+            lip_refiner = "latentsync-1.5"
+        else:
+            typer.echo("3/3 Lip refinement disabled; using EchoMimic output.")
+            final_video.write_bytes(body_video.read_bytes())
+            lip_refiner = None
 
     result = {
         "job_id": job_id,
@@ -128,7 +137,9 @@ def local_test(
         "final_video": str(final_video),
         "tts_engine": tts_engine or VOICE_PRESETS[voice].engine,
         "voice_preset": voice,
-        "lip_refined": bool(refine_lips or settings.musetalk_enabled),
+        "quality_profile": "v2" if quality_v2 else "legacy",
+        "chunk_seconds": settings.avatar_chunk_seconds if quality_v2 else None,
+        "lip_refiner": lip_refiner,
     }
     typer.echo(json.dumps(result, indent=2))
 
