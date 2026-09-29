@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     echo_guidance_scale: float = 4.5
     echo_audio_guidance_scale: float = 2.0
     echo_seed: int = 43
+    echo_weight_dtype: str = "bfloat16"
 
     # MuseTalk 1.5 is an optional lip-sync refinement stage after EchoMimic.
     musetalk_enabled: bool = False
