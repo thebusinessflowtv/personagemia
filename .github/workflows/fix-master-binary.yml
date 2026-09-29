@@ -1,0 +1,66 @@
+name: Fix Mr Uncut Master Binary
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-master-binary.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix-master:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Decode and validate PNG master
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 --decode assets/mr_uncut_master.png > /tmp/mr_uncut_master.png
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('/tmp/mr_uncut_master.png')
+          data = p.read_bytes()
+          if not data.startswith(b'\x89PNG\r\n\x1a\n'):
+              raise SystemExit('Decoded master is not a valid PNG')
+          print(f'PNG signature OK; bytes={len(data)}')
+          PY
+          mv /tmp/mr_uncut_master.png assets/mr_uncut_master.png
+
+      - name: Replace stale JPG references
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          paths = [
+              Path('kaggle/mr_uncut_test.py'),
+              Path('README.md'),
+              Path('.github/workflows/local-avatar-test.yml'),
+              Path('config/mr_uncut.yaml'),
+          ]
+          for path in paths:
+              text = path.read_text(encoding='utf-8')
+              text = text.replace('assets/mr_uncut_master.jpg', 'assets/mr_uncut_master.png')
+              path.write_text(text, encoding='utf-8')
+          PY
+          rm -f assets/mr_uncut_master.jpg assets/.binary-upload-warning.txt
+          grep -R --line-number --exclude-dir=.git 'assets/mr_uncut_master\.jpg' . && exit 1 || true
+
+      - name: Commit corrected master
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'thebusinessflowtv'
+          git config user.email 'thebusinessflowtv@gmail.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'Nothing to commit.'
+            exit 0
+          fi
+          git commit -m 'fix: restore valid Mr. Uncut PNG master'
+          git push origin HEAD:main
