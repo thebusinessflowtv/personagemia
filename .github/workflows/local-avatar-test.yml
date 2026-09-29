@@ -49,7 +49,7 @@ jobs:
       - name: Render Mr. Uncut locally
         run: >-
           personagemia local-test
-          --image assets/mr_uncut_master.jpg
+          --image assets/mr_uncut_master.png
           --script "${{ inputs.script }}"
           --voice "${{ inputs.voice }}"
           --tts-engine "${{ inputs.tts_engine }}"
