@@ -54,7 +54,7 @@ Final video
 The canonical character/studio frame lives at:
 
 ```text
-assets/mr_uncut_master.jpg
+assets/mr_uncut_master.png
 ```
 
 Character behavior and editorial rules live at:
@@ -113,7 +113,7 @@ INSTALL_MUSETALK=1 bash scripts/bootstrap_local_ai.sh
 
 ```bash
 personagemia local-test \
-  --image assets/mr_uncut_master.jpg \
+  --image assets/mr_uncut_master.png \
   --script "Everybody keeps pretending this is normal. I don't buy it. I'm Mr. Uncut, and I'm going to say exactly what I think." \
   --voice electric \
   --tts-engine chatterbox \
