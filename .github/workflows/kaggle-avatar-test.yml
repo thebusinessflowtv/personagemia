@@ -123,16 +123,32 @@ jobs:
           kaggle kernels logs "$KERNEL" || true
           exit 1
 
-      - name: Download Kaggle output
+      - name: Download Kaggle result
         if: always()
         run: |
+          rm -rf outputs/kaggle
           mkdir -p outputs/kaggle
           kaggle kernels output "$KAGGLE_USERNAME/mr-uncut-gpu-test" -p outputs/kaggle -o || true
+          echo 'Downloaded Kaggle files:'
+          find outputs/kaggle -maxdepth 2 -type f -printf '%p %k KB\n' | sort || true
+
+      - name: Stage compact result artifact
+        if: always()
+        run: |
+          mkdir -p outputs/result
+          find outputs/kaggle -maxdepth 1 -type f \( \
+            -name 'mr_uncut_kaggle_test.mp4' -o \
+            -name 'mr_uncut_voice.wav' -o \
+            -name 'mr_uncut_run_info.json' -o \
+            -name 'mr_uncut_error.txt' -o \
+            -name '*.log' \
+          \) -exec cp {} outputs/result/ \; || true
+          du -sh outputs/result || true
 
       - name: Upload Mr. Uncut result
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: mr-uncut-kaggle-test
-          path: outputs/kaggle/
+          path: outputs/result/
           if-no-files-found: warn
