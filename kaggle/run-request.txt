@@ -1,14 +1,23 @@
-Mr. Uncut Kaggle GPU calibration #9
+Mr. Uncut Kaggle GPU calibration #10
 voice=puck
 script=default
-engine=EchoMimicV2-full
-resolution=768x768
+pipeline=Mr-Uncut-Avatar-Quality-V2
+motion=EchoMimicV2-full
+motion_resolution=768x768
 frames=72
 duration=3s
-steps=30
-cfg=2.5
+motion_steps=30
+motion_cfg=2.5
 context_frames=12
 context_overlap=8
 pose=official-schema-neutral-hands
-reference=reference/mr_uncut_reference.png
-reason=retry full-quality identity and temporal consistency calibration after fixing infer.py reference path expectation
+reference=assets/mr_uncut_master.png
+lip_refiner=LatentSync-1.5
+lip_steps=30
+lip_guidance=1.35
+studio=static-garage-v1
+final_resolution=1280x720
+matting=u2net-human-seg
+alpha_temporal_smoothing=0.22
+max_production_chunk_seconds=3.0
+reason=HeyGen-style quality V2: reduce teeth/lip artifacts, improve temporal consistency, lock identity scale and keep the official studio completely static
