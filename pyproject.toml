@@ -35,3 +35,6 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+"kaggle/mr_uncut_quality_v2.py" = ["E702", "F401"]
