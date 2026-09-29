@@ -4,7 +4,7 @@ language: en-US
 identity:
   fictional: true
   canonical_pack: external/character_pack.zip
-  master_image: assets/mr_uncut_master.jpg
+  master_image: assets/mr_uncut_master.png
   studio_plate: external/studio_master.png
   fixed_identity: true
   fixed_wardrobe: true
