@@ -1,9 +1,13 @@
-Mr. Uncut Kaggle GPU calibration #7
+Mr. Uncut Kaggle GPU calibration #8
 voice=puck
 script=default
-engine=EchoMimicV2-accelerated
+engine=EchoMimicV2-full
 resolution=768x768
 frames=72
 duration=3s
-pose=neutral-hands
-reason=preserve face with top-anchored crop and remove incompatible demo hand conditioning that caused phantom/deformed limbs in test 6
+steps=30
+cfg=2.5
+context_frames=12
+context_overlap=8
+pose=official-schema-neutral-hands
+reason=validate identity and temporal consistency with the full EchoMimicV2 model after accelerated test 6 produced unstable, inconsistent frames and test 7 failed before render due to an incomplete pose schema
