@@ -55,7 +55,9 @@ class Settings(BaseSettings):
     latentsync_enabled: bool = True
     latentsync_root: Path = Path.home() / ".personagemia-ai/engines/LatentSync"
     latentsync_python: Path = Path.home() / ".personagemia-ai/venvs/latentsync/bin/python"
-    latentsync_checkpoint: Path = Path.home() / ".personagemia-ai/models/latentsync/latentsync_unet.pt"
+    latentsync_checkpoint: Path = (
+        Path.home() / ".personagemia-ai/engines/LatentSync/checkpoints/latentsync_unet.pt"
+    )
     latentsync_steps: int = 30
     latentsync_guidance_scale: float = 1.35
 
