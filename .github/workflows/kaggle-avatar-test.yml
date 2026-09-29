@@ -66,14 +66,14 @@ jobs:
           import os
           from pathlib import Path
 
-          source = Path('kaggle/mr_uncut_test.py').read_text(encoding='utf-8')
+          source = Path('kaggle/mr_uncut_quality_v2.py').read_text(encoding='utf-8')
           encoded = base64.b64encode(os.environ['TEST_SCRIPT'].encode('utf-8')).decode('ascii')
           source = source.replace('__SCRIPT_B64__', encoded)
           source = source.replace('__VOICE__', os.environ['TEST_VOICE'])
 
           build = Path('build/kaggle-mr-uncut')
           build.mkdir(parents=True, exist_ok=True)
-          (build / 'mr_uncut_test.py').write_text(source, encoding='utf-8')
+          (build / 'mr_uncut_quality_v2.py').write_text(source, encoding='utf-8')
 
           username = os.environ['KAGGLE_USERNAME'].strip()
           if not username:
@@ -82,7 +82,7 @@ jobs:
           metadata = {
               'id': f'{username}/mr-uncut-gpu-test',
               'title': 'Mr Uncut GPU Test',
-              'code_file': 'mr_uncut_test.py',
+              'code_file': 'mr_uncut_quality_v2.py',
               'language': 'python',
               'kernel_type': 'script',
               'is_private': True,
@@ -94,9 +94,7 @@ jobs:
               'kernel_sources': [],
               'model_sources': [],
           }
-          (build / 'kernel-metadata.json').write_text(
-              json.dumps(metadata, indent=2), encoding='utf-8'
-          )
+          (build / 'kernel-metadata.json').write_text(json.dumps(metadata, indent=2), encoding='utf-8')
           PY
 
       - name: Submit render to free Kaggle GPU
@@ -138,6 +136,8 @@ jobs:
           mkdir -p outputs/result
           find outputs/kaggle -maxdepth 1 -type f \( \
             -name 'mr_uncut_kaggle_test.mp4' -o \
+            -name 'mr_uncut_echo_raw.mp4' -o \
+            -name 'mr_uncut_latentsync.mp4' -o \
             -name 'mr_uncut_voice.wav' -o \
             -name 'mr_uncut_run_info.json' -o \
             -name 'mr_uncut_error.txt' -o \
