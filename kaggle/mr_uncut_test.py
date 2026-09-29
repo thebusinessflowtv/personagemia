@@ -216,7 +216,9 @@ def prepare_reference() -> Path:
     image = image.crop((left, top, left + side, top + side))
     image = image.resize((RENDER_SIZE, RENDER_SIZE), Image.Resampling.LANCZOS)
 
-    target = TEMP / "mr_uncut_reference.png"
+    ref_dir = TEMP / "reference"
+    ref_dir.mkdir(parents=True, exist_ok=True)
+    target = ref_dir / "mr_uncut_reference.png"
     image.save(target, optimize=True)
     print(
         f"Reference ready: {target} source={w}x{h} crop=({left},{top},{left + side},{top + side}) "
@@ -311,7 +313,7 @@ def render(models: dict[str, str]) -> None:
             "--ref_images_dir",
             str(TEMP),
             "--refimg_name",
-            reference.name,
+            reference.relative_to(TEMP).as_posix(),
             "--audio_dir",
             str(WORK),
             "--audio_name",
