@@ -58,6 +58,14 @@ def run_doctor(settings: Settings | None = None) -> list[Check]:
         )
     )
 
+    if settings.latentsync_enabled:
+        checks.append(_path_check("LatentSync runtime", settings.latentsync_python))
+        checks.append(_path_check("LatentSync code", settings.latentsync_root / "scripts/inference.py"))
+        checks.append(_path_check("LatentSync UNet", settings.latentsync_checkpoint))
+        checks.append(
+            _path_check("LatentSync Whisper", settings.latentsync_root / "checkpoints/whisper/tiny.pt")
+        )
+
     if settings.musetalk_enabled:
         checks.append(_path_check("MuseTalk runtime", settings.musetalk_python))
         checks.append(_path_check("MuseTalk code", settings.musetalk_root / "scripts/inference.py"))
