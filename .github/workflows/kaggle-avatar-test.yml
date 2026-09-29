@@ -6,6 +6,7 @@ on:
       kaggle_username:
         description: Kaggle username (public, not a secret)
         required: true
+        default: guilhermeodsgn
         type: string
       script:
         description: Short English line for Mr. Uncut
@@ -21,6 +22,10 @@ on:
           - puck
           - adam
           - liam
+  push:
+    branches: [main]
+    paths:
+      - 'kaggle/run-request.txt'
 
 jobs:
   kaggle-render:
@@ -28,9 +33,9 @@ jobs:
     timeout-minutes: 180
     env:
       KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
-      KAGGLE_USERNAME: ${{ inputs.kaggle_username }}
-      TEST_SCRIPT: ${{ inputs.script }}
-      TEST_VOICE: ${{ inputs.voice }}
+      KAGGLE_USERNAME: ${{ inputs.kaggle_username || secrets.KAGGLE_USERNAME }}
+      TEST_SCRIPT: ${{ inputs.script || 'Everybody keeps pretending this is normal. I don''t buy it. I''m Mr. Uncut, and I''m going to say exactly what I think.' }}
+      TEST_VOICE: ${{ inputs.voice || 'puck' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -45,6 +50,10 @@ jobs:
         run: |
           if [ -z "$KAGGLE_API_TOKEN" ]; then
             echo 'Missing repository secret KAGGLE_API_TOKEN.'
+            exit 2
+          fi
+          if [ -z "$KAGGLE_USERNAME" ]; then
+            echo 'Missing Kaggle username.'
             exit 2
           fi
           kaggle config view
