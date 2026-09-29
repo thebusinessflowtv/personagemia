@@ -1,6 +1,9 @@
-Mr. Uncut Kaggle GPU test #6
+Mr. Uncut Kaggle GPU calibration #7
 voice=puck
 script=default
 engine=EchoMimicV2-accelerated
 resolution=768x768
-reason=align render and reference with the official EchoMimicV2 halfbody pose canvas after test 5 failed on 768-to-512 broadcast mismatch
+frames=72
+duration=3s
+pose=neutral-hands
+reason=preserve face with top-anchored crop and remove incompatible demo hand conditioning that caused phantom/deformed limbs in test 6
