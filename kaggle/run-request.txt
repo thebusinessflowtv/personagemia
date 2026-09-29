@@ -1,6 +1,6 @@
-Mr. Uncut Kaggle GPU test #5
+Mr. Uncut Kaggle GPU test #6
 voice=puck
 script=default
 engine=EchoMimicV2-accelerated
-resolution=512x512
-reason=validated binary PNG master uploaded to assets/mr_uncut_master.png and all stale JPG references removed
+resolution=768x768
+reason=align render and reference with the official EchoMimicV2 halfbody pose canvas after test 5 failed on 768-to-512 broadcast mismatch
