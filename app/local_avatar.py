@@ -48,6 +48,9 @@ class EchoMimicFlashEngine:
         model_root = self.settings.echo_model_root
         expected = self.settings.echo_output_dir / f"{job_stem}_output.mp4"
 
+        if self.settings.echo_weight_dtype not in {"float16", "bfloat16"}:
+            raise ValueError("echo_weight_dtype must be float16 or bfloat16")
+
         command = [
             str(self.settings.echo_python),
             "infer_flash.py",
@@ -104,7 +107,7 @@ class EchoMimicFlashEngine:
             "--ring_degree",
             "1",
             "--weight_dtype",
-            "bfloat16",
+            self.settings.echo_weight_dtype,
             "--sample_size",
             str(self.settings.echo_size),
             str(self.settings.echo_size),
