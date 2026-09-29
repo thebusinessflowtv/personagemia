@@ -1,4 +1,6 @@
-Mr. Uncut Kaggle GPU test requested 2026-09-29T00:35:00-03:00
+Mr. Uncut Kaggle GPU test requested 2026-09-28T22:07:00-03:00
 voice=puck
 script=default
-reason=retry after Kaggle phone verification and notebook notebookd6f44dc7a9 creation
+engine=EchoMimicV2-accelerated
+resolution=512x512
+reason=retry after V3 disk exhaustion; compact temp-only model layout
