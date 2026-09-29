@@ -74,10 +74,13 @@ def install_runtime() -> None:
     run(["git", "clone", "--depth", "1", "https://github.com/antgroup/echomimic_v2.git", str(ECHO_ROOT)])
 
     # Keep Kaggle's CUDA-enabled torch/torchvision. Install only inference-time deps.
+    # EchoMimicV2 publishes accelerate==1.1.1. Pin transformers to the matching
+    # 4.46.3 generation instead of letting pip install a newer release that expects
+    # accelerate APIs unavailable in 1.1.1.
     packages = [
         "numpy==1.26.4",
         "diffusers==0.31.0",
-        "transformers>=4.46.3",
+        "transformers==4.46.3",
         "accelerate==1.1.1",
         "torchmetrics",
         "torchtyping",
@@ -98,6 +101,18 @@ def install_runtime() -> None:
         "misaki[en]",
     ]
     run([sys.executable, "-m", "pip", "install", "-q", "--no-cache-dir", *packages])
+
+    # Fail early with a tiny compatibility probe before spending time on model downloads.
+    sh(
+        f"{sys.executable} - <<'PY'\n"
+        "from transformers import AlbertModel\n"
+        "from accelerate import __version__ as accelerate_version\n"
+        "import transformers\n"
+        "print('transformers', transformers.__version__)\n"
+        "print('accelerate', accelerate_version)\n"
+        "print('dependency probe OK:', AlbertModel.__name__)\n"
+        "PY"
+    )
     disk_report("after runtime")
 
 
