@@ -68,8 +68,16 @@ jobs:
 
           source = Path('kaggle/mr_uncut_quality_v2.py').read_text(encoding='utf-8')
           encoded = base64.b64encode(os.environ['TEST_SCRIPT'].encode('utf-8')).decode('ascii')
-          source = source.replace('__SCRIPT_B64__', encoded)
-          source = source.replace('__VOICE__', os.environ['TEST_VOICE'])
+          source = source.replace(
+              'SCRIPT_B64 = "__SCRIPT_B64__"',
+              f'SCRIPT_B64 = {encoded!r}',
+              1,
+          )
+          source = source.replace(
+              'VOICE = "__VOICE__"',
+              f'VOICE = {os.environ["TEST_VOICE"]!r}',
+              1,
+          )
 
           build = Path('build/kaggle-mr-uncut')
           build.mkdir(parents=True, exist_ok=True)
